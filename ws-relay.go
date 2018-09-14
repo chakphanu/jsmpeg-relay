@@ -24,7 +24,10 @@ var useStreamKey *bool
 func publishHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	appName := vars["app_name"]
-	streamKey := vars["stream_key"]
+	streamKey := ""
+	if *useStreamKey {
+		streamKey = vars["stream_key"]
+	}
 
 	// logging.Infof("publish stream %v / %v", app_name, stream_key)
 	if r.Body != nil {
@@ -59,7 +62,10 @@ func publishHandler(w http.ResponseWriter, r *http.Request) {
 func playHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	appName := vars["app_name"]
-	streamKey := vars["stream_key"]
+	streamKey := ""
+	if *useStreamKey {
+		streamKey = vars["stream_key"]
+	}
 
 	logging.Infof("play stream %v / %v", appName, streamKey)
 
@@ -139,15 +145,16 @@ func main() {
 		logging.Infof("SSL disable")
 	}
 
+	r := mux.NewRouter()
 	if *useStreamKey {
 		logging.Infof("StreamKey enable")
+		r.HandleFunc("/publish/{app_name}/{stream_key}", publishHandler).Methods("POST")
+		r.HandleFunc("/play/{app_name}/{stream_key}", playHandler)
 	} else {
 		logging.Infof("StreamKey disable")
+		r.HandleFunc("/publish/{app_name}", publishHandler).Methods("POST")
+		r.HandleFunc("/play/{app_name}", playHandler)
 	}
-
-	r := mux.NewRouter()
-	r.HandleFunc("/publish/{app_name}/{stream_key}", publishHandler).Methods("POST")
-	r.HandleFunc("/play/{app_name}/{stream_key}", playHandler)
 
 	var debugPath = "/debug/"
 	if *debugKey != "" {

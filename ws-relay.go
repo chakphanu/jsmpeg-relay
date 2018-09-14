@@ -123,6 +123,7 @@ func playHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	var listenAddr = flag.String("l", "0.0.0.0:8080", "")
+	var debugKey = flag.String("d", "", "")
 	var sslCert = flag.String("sslcert", "", "")
 	var sslPriv = flag.String("sslpriv", "", "")
 	useStreamKey = flag.Bool("k", true, "-k=true or -k=false")
@@ -147,17 +148,23 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/publish/{app_name}/{stream_key}", publishHandler).Methods("POST")
 	r.HandleFunc("/play/{app_name}/{stream_key}", playHandler)
-	r.HandleFunc("/debug/pprof/", pprof.Index)
-	r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	r.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	r.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	r.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	var debugPath = "/debug/"
+	if *debugKey != "" {
+		debugPath = debugPath + *debugKey + "/"
+		logging.Infof("debug path = %v", debugPath)
+	}
+	r.HandleFunc(debugPath+"pprof/", pprof.Index)
+	r.HandleFunc(debugPath+"pprof/cmdline", pprof.Cmdline)
+	r.HandleFunc(debugPath+"pprof/profile", pprof.Profile)
+	r.HandleFunc(debugPath+"pprof/symbol", pprof.Symbol)
+	r.HandleFunc(debugPath+"pprof/trace", pprof.Trace)
 
 	// Manually add support for paths linked to by index page at /debug/pprof/
-	r.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
-	r.Handle("/debug/pprof/heap", pprof.Handler("heap"))
-	r.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
-	r.Handle("/debug/pprof/block", pprof.Handler("block"))
+	r.Handle(debugPath+"pprof/goroutine", pprof.Handler("goroutine"))
+	r.Handle(debugPath+"pprof/heap", pprof.Handler("heap"))
+	r.Handle(debugPath+"pprof/threadcreate", pprof.Handler("threadcreate"))
+	r.Handle(debugPath+"pprof/block", pprof.Handler("block"))
 
 	srv := &http.Server{
 		Addr: *listenAddr,

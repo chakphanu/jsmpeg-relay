@@ -19,6 +19,8 @@ import (
 //Broker default
 var broker = pubsub.NewBroker()
 
+var useStreamKey *bool
+
 func publishHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	appName := vars["app_name"]
@@ -37,7 +39,12 @@ func publishHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			if n > 0 {
 				// logging.Info("broadcast stream")
-				broker.Broadcast(buf[:n], appName+"/"+streamKey)
+				if *useStreamKey {
+					broker.Broadcast(buf[:n], appName+"/"+streamKey)
+				} else {
+					broker.Broadcast(buf[:n], appName)
+				}
+
 			}
 		}
 
@@ -83,8 +90,12 @@ func playHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	logging.Info("client remote addr: ", c.RemoteAddr())
+	if *useStreamKey {
+		broker.Subscribe(subscriber, appName+"/"+streamKey)
+	} else {
+		broker.Subscribe(subscriber, appName)
+	}
 
-	broker.Subscribe(subscriber, appName+"/"+streamKey)
 	for {
 		select {
 		// case <- c.Closing():
@@ -112,12 +123,26 @@ func playHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	var listenAddr = flag.String("l", "0.0.0.0:8080", "")
+	var sslCert = flag.String("sslcert", "", "")
+	var sslPriv = flag.String("sslpriv", "", "")
+	useStreamKey = flag.Bool("k", true, "-k=true or -k=false")
 	var wait time.Duration
 	flag.DurationVar(&wait, "graceful-timeout", time.Second*15, "the duration for which the server gracefully wait for existing connections to finish - e.g. 15s or 1m")
 	flag.Parse()
 
 	logging.Info("start ws-relay ....")
 	logging.Infof("server listen @ %v", *listenAddr)
+	if *sslCert != "" && *sslPriv != "" {
+		logging.Infof("SSL enable")
+	} else {
+		logging.Infof("SSL disable")
+	}
+
+	if *useStreamKey {
+		logging.Infof("StreamKey enable")
+	} else {
+		logging.Infof("StreamKey disable")
+	}
 
 	r := mux.NewRouter()
 	r.HandleFunc("/publish/{app_name}/{stream_key}", publishHandler).Methods("POST")
@@ -148,9 +173,16 @@ func main() {
 
 	// Run our server in a goroutine so that it doesn't block.
 	go func() {
-		if err := srv.ListenAndServe(); err != nil {
-			logging.Error("server listen error:", err)
+		if *sslCert != "" && *sslPriv != "" {
+			if err := srv.ListenAndServeTLS(*sslCert, *sslPriv); err != nil {
+				logging.Error("server(SSL) listen error:", err)
+			}
+		} else {
+			if err := srv.ListenAndServe(); err != nil {
+				logging.Error("server listen error:", err)
+			}
 		}
+
 	}()
 
 	c := make(chan os.Signal, 1)
